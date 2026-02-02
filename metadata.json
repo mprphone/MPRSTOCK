@@ -1,0 +1,7 @@
+{
+  "name": "TaxStock Pro - Inventário AT Portugal",
+  "description": "Ferramenta profissional para converter listagens de produtos em ficheiros XML/CSV validados para comunicação de inventário à Autoridade Tributária Portuguesa.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
