@@ -455,7 +455,7 @@ const App: React.FC = () => {
       </main>
 
       <footer className="bg-white border-t border-slate-200 py-8 text-center text-[10px] text-slate-400 font-black uppercase tracking-widest">
-        MPRSTOCK v3.7 &bull; Proteção de Colunas RFC 4180 Ativada
+        MPRSTOCK {import.meta.env.VITE_APP_VERSION || 'dev'} &bull; Proteção de Colunas RFC 4180 Ativada
       </footer>
     </div>
   );

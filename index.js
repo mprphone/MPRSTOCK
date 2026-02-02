@@ -1,11 +1,17 @@
 // /home/ubuntu/programas/inventarios/index.js
 
 // Importa as bibliotecas necessárias
+require('dotenv').config(); // Carrega as variáveis de ambiente do ficheiro .env
 const express = require('express');
 const cors = require('cors');
+const fs = require('fs');
 const { formidable } = require('formidable'); // Biblioteca para processar uploads
-// A biblioteca da Google AI será usada aqui mais tarde
-// const { GoogleGenerativeAI } = require("@google/genai");
+const { GoogleGenerativeAI } = require("@google/genai");
+
+// --- Configuração da IA ---
+const apiKey = process.env.GEMINI_API_KEY;
+const modelName = process.env.GEMINI_MODEL || 'gemini-flash-latest'; // Usa a variável de ambiente com um fallback
+const genAI = new GoogleGenerativeAI(apiKey);
 
 // Configuração do Servidor
 const app = express();
@@ -23,7 +29,7 @@ app.use(express.json());
  * @route   POST /api/parse-pdf
  * @desc    Recebe um ficheiro PDF, usa IA para o analisar e devolve os dados dos produtos.
  */
-app.post('/api/parse-pdf', (req, res) => {
+app.post('/api/parse-pdf', async (req, res) => {
   const form = formidable({});
 
   form.parse(req, (err, fields, files) => {
@@ -42,26 +48,45 @@ app.post('/api/parse-pdf', (req, res) => {
 
     console.log(`📄 Ficheiro recebido para processamento com IA: ${file.originalFilename} (${file.mimetype})`);
 
-    // --- A LÓGICA DE PROCESSAMENTO COM IA IRÁ AQUI ---
-    // Por agora, vamos apenas simular uma resposta de sucesso com dados de exemplo.
-    try {
-      console.log('🤖 A simular processamento com IA... A devolver dados de exemplo.');
+    // --- LÓGICA DE PROCESSAMENTO COM IA ---
+    const runAI = async () => {
+      try {
+        if (!apiKey) {
+          throw new Error("A chave de API do Gemini não está configurada no servidor.");
+        }
+        console.log(`🤖 A iniciar processamento com IA usando o modelo: ${modelName}`);
 
-      const mockProducts = [
-        { code: 'PDF-001', description: 'Produto lido de PDF 1', quantity: 10, unitValue: 19.99, type: 'M', unit: 'UN' },
-        { code: 'PDF-002', description: 'Produto lido de PDF 2', quantity: 5, unitValue: 10.50, type: 'P', unit: 'UN' },
-      ];
+        const model = genAI.getGenerativeModel({ model: modelName });
 
-      // Num cenário real, você analisaria a resposta da IA aqui.
-      // const parsedProducts = JSON.parse(aiResponseText);
+        const prompt = `Analisa este documento de inventário. Extrai os produtos e devolve APENAS um array de objetos JSON com a seguinte estrutura: { "code": "string", "description": "string", "quantity": number, "unitValue": number, "type": "M" | "P" | "A" | "S" | "T", "unit": "string" }. Não inclua mais nenhum texto ou formatação na resposta.`;
 
-      // Envia os dados de exemplo de volta para a aplicação React
-      res.status(200).json(mockProducts);
+        const imagePart = {
+          inlineData: {
+            data: fs.readFileSync(file.filepath).toString("base64"),
+            mimeType: file.mimetype,
+          },
+        };
 
-    } catch (aiError) {
-      console.error("❌ Erro durante a simulação da IA:", aiError);
-      res.status(500).json({ error: 'Falha ao analisar o documento.' });
+        const result = await model.generateContent([prompt, imagePart]);
+        const responseText = result.response.text();
+        
+        // Limpa a resposta da IA para garantir que é um JSON válido
+        const cleanedJson = responseText.replace(/```json\n?/, '').replace(/```/, '').trim();
+        const parsedProducts = JSON.parse(cleanedJson);
+
+        console.log(`✅ IA processou ${parsedProducts.length} produtos.`);
+        res.status(200).json(parsedProducts);
+
+      } catch (aiError) {
+        console.error("❌ Erro durante o processamento com IA:", aiError);
+        res.status(500).json({ error: 'Falha ao analisar o documento com a IA.' });
+      } finally {
+        // Limpa o ficheiro temporário
+        fs.unlinkSync(file.filepath);
+      }
     }
+
+    runAI();
   });
 });
 
