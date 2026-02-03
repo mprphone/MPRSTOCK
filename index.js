@@ -18,8 +18,13 @@ const app = express();
 const PORT = 8080; // A porta onde o nosso servidor vai funcionar
 
 // Middleware
-// O 'cors' permite que a sua aplicação React (que corre noutra porta) faça pedidos a este servidor.
-app.use(cors());
+// Configuração explícita do CORS para permitir pedidos do seu frontend
+const corsOptions = {
+  origin: 'http://localhost:3001', // A origem da sua aplicação React
+  optionsSuccessStatus: 200
+};
+app.use(cors(corsOptions));
+
 // Permite que o servidor entenda JSON nos corpos dos pedidos.
 app.use(express.json());
 

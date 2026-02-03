@@ -72,7 +72,7 @@ const App: React.FC = () => {
     if (!file) return;
 
     // A chamada a setIsProcessing(true) já é feita em handleFileUpload
-    setErrorMessage('');
+    setErrorMsg('');
 
     const formData = new FormData();
     // A chave 'upload' deve corresponder ao que o backend espera.
@@ -95,11 +95,16 @@ const App: React.FC = () => {
       // A resposta do backend já inclui os produtos validados
       const productsFromApi: Product[] = responseData;
 
-      // Adiciona os novos produtos à tabela
-      setProducts(prevProducts => [...prevProducts, ...productsFromApi]);
+      if (productsFromApi.length === 0) {
+        setSuccessMsg('O PDF foi processado, mas não foram encontrados artigos.');
+        setTimeout(() => setSuccessMsg(null), 4000);
+      } else {
+        // Adiciona os novos produtos à tabela
+        setProducts(prevProducts => [...prevProducts, ...productsFromApi]);
+      }
     } catch (error: any) {
       console.error('❌ Erro ao processar o PDF:', error);
-      setErrorMessage(error.message || 'Ocorreu um erro desconhecido ao processar o PDF.');
+      setErrorMsg(error.message || 'Ocorreu um erro desconhecido ao processar o PDF.');
     } finally {
       setIsProcessing(false);
     }
