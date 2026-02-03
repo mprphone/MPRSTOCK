@@ -9,8 +9,8 @@ const { formidable } = require('formidable'); // Biblioteca para processar uploa
 const { GoogleGenAI } = require("@google/genai");
 
 // --- Configuração da IA ---
-const apiKey = process.env.GEMINI_API_KEY;
-const modelName = process.env.GEMINI_MODEL || 'gemini-flash-latest'; // Usa a variável de ambiente com um fallback
+const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+const modelName = process.env.GEMINI_MODEL || 'gemini-2.5-flash'; // Modelo estável por omissão
 const genAI = new GoogleGenAI({ apiKey });
 
 // Configuração do Servidor
@@ -163,10 +163,14 @@ app.post('/api/parse-pdf', async (req, res) => {
 
       } catch (aiError) {
         console.error("❌ Erro durante o processamento com IA:", aiError);
-        res.status(500).json({ error: 'Falha ao analisar o documento com a IA.' });
+        const status = aiError?.status ? ` (status ${aiError.status})` : "";
+        const details = aiError?.message || "Erro desconhecido no processamento.";
+        res.status(500).json({ error: `Falha ao analisar o documento com a IA${status}: ${details}` });
       } finally {
         // Limpa o ficheiro temporário
-        fs.unlinkSync(file.filepath);
+        if (file?.filepath && fs.existsSync(file.filepath)) {
+          fs.unlinkSync(file.filepath);
+        }
       }
     }
 
