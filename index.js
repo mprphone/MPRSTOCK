@@ -18,9 +18,20 @@ const app = express();
 const PORT = 8080; // A porta onde o nosso servidor vai funcionar
 
 // Middleware
-// Configuração explícita do CORS para permitir pedidos do seu frontend
+// Configuração de CORS para desenvolvimento e produção (Vercel)
+const allowedOrigins = ['http://localhost:3001'];
+if (process.env.VERCEL_URL) {
+  allowedOrigins.push(`https://${process.env.VERCEL_URL}`);
+}
+
 const corsOptions = {
-  origin: 'http://localhost:3001', // A origem da sua aplicação React
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Não permitido por CORS'));
+    }
+  },
   optionsSuccessStatus: 200
 };
 app.use(cors(corsOptions));
@@ -115,6 +126,11 @@ app.post('/api/parse-pdf', async (req, res) => {
         const result = await model.generateContent([prompt, imagePart]);
         const responseText = result.response.text();
         
+        // --- NOVO LOG DE DEPURAÇÃO ---
+        console.log("--- Resposta Bruta da IA ---");
+        console.log(responseText);
+        console.log("--------------------------");
+
         // Limpa a resposta da IA para garantir que é um JSON válido
         const cleanedJson = responseText.replace(/```json\n?/, '').replace(/```/, '').trim();
         const parsedProducts = JSON.parse(cleanedJson);
