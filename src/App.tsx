@@ -12,6 +12,16 @@ interface RawDataState {
 }
 
 const App: React.FC = () => {
+  const apiBaseUrl = useMemo(() => {
+    if (import.meta.env.VITE_API_BASE_URL) {
+      return import.meta.env.VITE_API_BASE_URL;
+    }
+
+    const host = window.location.hostname;
+    const isLocalHost = host === 'localhost' || host === '127.0.0.1';
+    return isLocalHost ? 'http://localhost:8080' : '';
+  }, []);
+
   const [products, setProducts] = useState<Product[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [rawData, setRawData] = useState<RawDataState | null>(null);
@@ -80,7 +90,7 @@ const App: React.FC = () => {
 
     try {
       // Faz o pedido para o nosso servidor de API que está a correr na porta 8080
-      const response = await fetch('http://localhost:8080/api/parse-pdf', {
+      const response = await fetch(`${apiBaseUrl}/api/parse-pdf`, {
         method: 'POST',
         body: formData,
       });

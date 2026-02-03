@@ -6,12 +6,12 @@ const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
 const { formidable } = require('formidable'); // Biblioteca para processar uploads
-const { GoogleGenerativeAI } = require("@google/genai");
+const { GoogleGenAI } = require("@google/genai");
 
 // --- Configuração da IA ---
 const apiKey = process.env.GEMINI_API_KEY;
 const modelName = process.env.GEMINI_MODEL || 'gemini-flash-latest'; // Usa a variável de ambiente com um fallback
-const genAI = new GoogleGenerativeAI(apiKey);
+const genAI = new GoogleGenAI({ apiKey });
 
 // Configuração do Servidor
 const app = express();
@@ -19,14 +19,18 @@ const PORT = 8080; // A porta onde o nosso servidor vai funcionar
 
 // Middleware
 // Configuração de CORS para desenvolvimento e produção (Vercel)
-const allowedOrigins = ['http://localhost:3001'];
+const allowedOrigins = ['http://localhost:3001', 'http://localhost:3000'];
 if (process.env.VERCEL_URL) {
   allowedOrigins.push(`https://${process.env.VERCEL_URL}`);
+}
+if (process.env.FRONTEND_URL) {
+  allowedOrigins.push(process.env.FRONTEND_URL);
 }
 
 const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
+    const isVercelPreview = origin && origin.endsWith('.vercel.app');
+    if (!origin || allowedOrigins.includes(origin) || isVercelPreview) {
       callback(null, true);
     } else {
       callback(new Error('Não permitido por CORS'));
@@ -112,19 +116,27 @@ app.post('/api/parse-pdf', async (req, res) => {
       try {
         console.log(`🤖 A iniciar processamento com IA usando o modelo: ${modelName}`);
 
-        const model = genAI.getGenerativeModel({ model: modelName });
-
         const prompt = `Analisa este documento de inventário. Extrai os produtos e devolve APENAS um array de objetos JSON com a seguinte estrutura: { "code": "string", "description": "string", "quantity": number, "unitValue": number, "type": "M" | "P" | "A" | "S" | "T", "unit": "string" }. Não inclua mais nenhum texto ou formatação na resposta.`;
 
-        const imagePart = {
+        const filePart = {
           inlineData: {
             data: fs.readFileSync(file.filepath).toString("base64"),
             mimeType: file.mimetype,
           },
         };
 
-        const result = await model.generateContent([prompt, imagePart]);
-        const responseText = result.response.text();
+        const result = await genAI.models.generateContent({
+          model: modelName,
+          contents: [{ text: prompt }, filePart],
+          config: {
+            responseMimeType: "application/json",
+          },
+        });
+
+        const responseText = typeof result.text === 'function' ? result.text() : result.text;
+        if (!responseText) {
+          throw new Error('A IA não devolveu conteúdo.');
+        }
         
         // --- NOVO LOG DE DEPURAÇÃO ---
         console.log("--- Resposta Bruta da IA ---");
@@ -180,8 +192,12 @@ app.get('/api/health', (req, res) => {
 });
 
 // Iniciar o Servidor
-app.listen(PORT, () => {
-  console.log(`🚀 Servidor de API a funcionar em http://localhost:${PORT}`);
-  console.log('✅ Pronto para receber pedidos da sua aplicação React.');
-  console.log('👉 Teste o servidor acedendo a http://localhost:8080/api/health');
-});
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`🚀 Servidor de API a funcionar em http://localhost:${PORT}`);
+    console.log('✅ Pronto para receber pedidos da sua aplicação React.');
+    console.log('👉 Teste o servidor acedendo a http://localhost:8080/api/health');
+  });
+}
+
+module.exports = app;
