@@ -27,6 +27,7 @@ const App: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isValuedExport, setIsValuedExport] = useState(true);
   const [showOnlyErrors, setShowOnlyErrors] = useState(false);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   /**
    * Validação rigorosa conforme Portaria 2/2015
@@ -91,23 +92,40 @@ const App: React.FC = () => {
         throw new Error(responseData.error || `Erro do servidor: ${response.statusText}`);
       }
 
-      // A resposta foi bem-sucedida, agora temos os produtos extraídos pela IA
-      const parsedProducts: Product[] = responseData;
-
-      // Reutilizamos a sua função de validação local para os novos produtos
-      const validatedProducts = parsedProducts.map(p => ({
-        ...p,
-        errors: validateProductLocal(p),
-      }));
+      // A resposta do backend já inclui os produtos validados
+      const productsFromApi: Product[] = responseData;
 
       // Adiciona os novos produtos à tabela
-      setProducts(prevProducts => [...prevProducts, ...validatedProducts]);
+      setProducts(prevProducts => [...prevProducts, ...productsFromApi]);
     } catch (error: any) {
       console.error('❌ Erro ao processar o PDF:', error);
       setErrorMessage(error.message || 'Ocorreu um erro desconhecido ao processar o PDF.');
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const handleValidateAll = () => {
+    if (products.length === 0) {
+      setErrorMsg("Não há artigos para validar.");
+      setTimeout(() => setErrorMsg(null), 3000);
+      return;
+    }
+
+    setIsProcessing(true);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    // Pequeno atraso para uma melhor experiência de utilizador
+    setTimeout(() => {
+      setProducts(prevProducts =>
+        prevProducts.map(p => ({ ...p, ...validateProductLocal(p) }))
+      );
+      setIsProcessing(false);
+      const errorCount = products.filter(p => validateProductLocal(p).errors.length > 0).length;
+      setSuccessMsg(`${products.length} artigos foram validados. Encontrados ${errorCount} erros.`);
+      setTimeout(() => setSuccessMsg(null), 4000);
+    }, 100);
   };
 
   const stats = useMemo<InventoryStats>(() => {
@@ -307,6 +325,13 @@ const App: React.FC = () => {
             >
               Novo Lote
             </button>
+            <button
+              onClick={handleValidateAll}
+              disabled={isProcessing || products.length === 0}
+              className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-50 hover:text-blue-500 transition-all active:scale-95 flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Validar Lote
+            </button>
           </div>
           
           <div className="flex items-center gap-4">
@@ -347,6 +372,19 @@ const App: React.FC = () => {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full">
+        {errorMsg && (
+          <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-lg mb-6 shadow-md" role="alert">
+            <p className="font-bold">Erro</p>
+            <p>{errorMsg}</p>
+          </div>
+        )}
+        {successMsg && (
+          <div className="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 rounded-lg mb-6 shadow-md animate-in fade-in duration-300" role="alert">
+            <p className="font-bold">Sucesso</p>
+            <p>{successMsg}</p>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
           <div className="bg-white p-7 rounded-3xl border border-slate-200 shadow-sm lg:col-span-2">
              <div className="grid grid-cols-2 gap-4 mb-8">

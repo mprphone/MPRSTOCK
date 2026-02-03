@@ -23,6 +23,45 @@ app.use(cors());
 // Permite que o servidor entenda JSON nos corpos dos pedidos.
 app.use(express.json());
 
+// --- Lógica de Validação (Portaria n.º 2/2015) ---
+const validateProduct = (p) => {
+  const errors = [];
+  let suggestion = "";
+
+  // Assegura que os valores são strings para as validações
+  const pCode = p.code ? String(p.code) : '';
+  const pDescription = p.description ? String(p.description) : '';
+  const pUnit = p.unit ? String(p.unit) : '';
+
+  // 1. Verificações de Presença
+  if (!pCode || pCode.trim() === "" || pCode === "SEM-COD") {
+    errors.push("Identificador do Produto (ProductCode) é obrigatório.");
+    suggestion = "Falta a referência do artigo.";
+  }
+  if (!pDescription || pDescription.trim() === "" || pDescription === "DESCRIÇÃO EM FALTA") {
+    errors.push("Descrição do Produto (ProductDescription) é obrigatória.");
+    suggestion = "Falta a designação comercial.";
+  }
+
+  // 2. Verificações de Comprimento Máximo
+  if (pCode.length > 60) {
+    errors.push(`Código excede 60 carateres (Atual: ${pCode.length}).`);
+  }
+  if (pDescription.length > 200) {
+    errors.push(`Descrição excede 200 carateres (Atual: ${pDescription.length}).`);
+  }
+  if (pUnit.length > 20) {
+    errors.push(`Unidade excede 20 carateres (Atual: ${pUnit.length}).`);
+  }
+
+  // 3. Verificação de Categoria
+  if (!p.type || !['M', 'P', 'A', 'S', 'T'].includes(p.type)) {
+    errors.push("Categoria inválida. Deve ser M, P, A, S ou T.");
+  }
+
+  return { errors, suggestions: suggestion };
+};
+
 // Endpoints da API
 
 /**
@@ -31,6 +70,10 @@ app.use(express.json());
  */
 app.post('/api/parse-pdf', async (req, res) => {
   const form = formidable({});
+
+  if (!apiKey) {
+    return res.status(500).json({ error: "A chave de API do Gemini não está configurada no servidor." });
+  }
 
   form.parse(req, (err, fields, files) => {
     if (err) {
@@ -51,9 +94,6 @@ app.post('/api/parse-pdf', async (req, res) => {
     // --- LÓGICA DE PROCESSAMENTO COM IA ---
     const runAI = async () => {
       try {
-        if (!apiKey) {
-          throw new Error("A chave de API do Gemini não está configurada no servidor.");
-        }
         console.log(`🤖 A iniciar processamento com IA usando o modelo: ${modelName}`);
 
         const model = genAI.getGenerativeModel({ model: modelName });
@@ -74,8 +114,19 @@ app.post('/api/parse-pdf', async (req, res) => {
         const cleanedJson = responseText.replace(/```json\n?/, '').replace(/```/, '').trim();
         const parsedProducts = JSON.parse(cleanedJson);
 
-        console.log(`✅ IA processou ${parsedProducts.length} produtos.`);
-        res.status(200).json(parsedProducts);
+        // Valida cada produto extraído pela IA
+        const validatedProducts = parsedProducts.map((product, index) => {
+          const { errors, suggestions } = validateProduct(product);
+          return {
+            ...product,
+            id: `pdf-${Date.now()}-${index}`, // Adiciona um ID único
+            errors: errors || [],
+            suggestions: suggestions || ''
+          };
+        });
+
+        console.log(`✅ IA processou e validou ${validatedProducts.length} produtos.`);
+        res.status(200).json(validatedProducts);
 
       } catch (aiError) {
         console.error("❌ Erro durante o processamento com IA:", aiError);
